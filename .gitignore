@@ -1,0 +1,6 @@
+# Proprietary Vivado installer, never commit or ship in the build context.
+*.tar.gz
+*.bin
+
+.git
+.build

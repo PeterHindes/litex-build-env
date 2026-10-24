@@ -1,0 +1,23 @@
+#### Vivado HL WebPACK Install Configuration ####
+# Validated with Xilinx_Vivado_2019.2_1106_2127.tar.gz.
+# WebPACK needs no license file for Artix-7 (xc7a100t-csg324-1).
+Edition=Vivado HL WebPACK
+
+# Path where Xilinx software will be installed.
+Destination=/opt/Xilinx
+
+# Choose the Products/Devices you would like to install.
+Modules=Virtex UltraScale+ HBM:1,Zynq UltraScale+ MPSoC:1,DocNav:1,Kintex UltraScale:1,Zynq-7000:1,System Generator for DSP:0,Virtex UltraScale+:1,Kintex UltraScale+:1,Model Composer:0
+
+# Choose the post install scripts you'd like to run as part of the finalization step.
+InstallOptions=
+
+## Shortcuts and File associations ##
+CreateProgramGroupShortcuts=0
+ProgramGroupFolder=Xilinx Design Tools
+CreateShortcutsForAllUsers=0
+CreateDesktopShortcuts=0
+CreateFileAssociation=0
+
+# Reduce installed footprint.
+EnableDiskUsageOptimization=1
