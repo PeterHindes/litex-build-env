@@ -20,8 +20,9 @@ base.py: xc7a100t-csg324-1
 ## Placement
 
 This directory lives inside a LiteX workspace created by `litex_setup.py`, next
-to `litex/`, `migen/`, `litex-boards/`, `litedram/`, … because `flake.nix`
-references those as `../litex`, `../migen`, and so on:
+to `litex/`, `migen/`, `litex-boards/`, `litedram/`, … because the dev shell
+imports those trees from the workspace (`LITEX_WORKSPACE`, `/workspace` in the
+container) instead of installing copies of them:
 
 ```text
 workspace/
@@ -48,10 +49,11 @@ docker run --rm -it \
 
 The container entrypoint is
 `nix develop --impure /workspace/build-env --accept-flake-config --command`, so
-any command given to `docker run` executes inside the dev shell. `--impure` is
-required because flake copies are evaluated from the Nix store and cannot reach
-sibling repositories by relative path; `LITEX_WORKSPACE` (default `/workspace`)
-locates `litex/`, `migen/`, `litex-boards/`, and the `pythondata-*` trees.
+any command given to `docker run` executes inside the dev shell. The image sets
+`LITEX_WORKSPACE=/workspace`, and the shell puts `litex/`, `migen/`,
+`litex-boards/`, and the `pythondata-*` trees from there on `PYTHONPATH` (they
+are imported from the mount, never installed), so commands also work when run
+from a lab subdirectory.
 
 Run commands from the lab directory (`-w /workspace/fpga_101/lab001`) so the
 generated `build/` lands next to the lab. The flake builds
@@ -121,7 +123,7 @@ Only these targets were exercised end to end; the remaining labs are unchanged.
 
 | File | Purpose |
 |---|---|
-| `flake.nix`, `flake.lock` | Nix dev shell (openXC7), paths relative to the workspace |
+| `flake.nix`, `flake.lock` | Nix dev shell (openXC7), a copy of the workspace root's flakes — keep them in sync |
 | `Dockerfile` | `openxc7` and `vivado` build targets |
 | `install_config.txt` | Non-interactive Vivado HL WebPACK install configuration |
 | `vivado-entrypoint.sh` | Emulation workaround + environment defaults |

@@ -13,8 +13,6 @@
     {
       devShells = forAllSystems (system:
         let
-          workspace = let ws = builtins.getEnv "LITEX_WORKSPACE"; in
-            if ws == "" then "/workspace" else ws;
           pkgs = import (if nixpkgs.lib.hasSuffix "-darwin" system
             then nixpkgs-darwin
             else nixpkgs) { inherit system; };
@@ -53,39 +51,7 @@
               sed -i "1s|.*|#!${pythonPackages.python.interpreter}|" "$out/bin/$script"
             done
           '' else null;
-          migen = pythonPackages.buildPythonPackage {
-            pname = "migen";
-            version = "0.9.2";
-            src = workspace + "/migen";
-            pyproject = true;
-            build-system = [ pythonPackages.setuptools ];
-            propagatedBuildInputs = [ pythonPackages.colorama ];
-          };
-          litex = pythonPackages.buildPythonPackage {
-            pname = "litex";
-            version = "2026.08";
-            src = workspace + "/litex";
-            pyproject = true;
-            build-system = [ pythonPackages.setuptools pythonPackages.wheel ];
-            propagatedBuildInputs = [
-              migen
-              pythonPackages.packaging
-              pythonPackages.pyserial
-              pythonPackages.requests
-            ];
-          };
-          litexBoards = pythonPackages.buildPythonPackage {
-            pname = "litex-boards";
-            version = "2026.08";
-            src = workspace + "/litex-boards";
-            pyproject = true;
-            build-system = [ pythonPackages.setuptools pythonPackages.wheel ];
-            propagatedBuildInputs = [ litex ];
-          };
           pythonEnv = pkgs.python312.withPackages (ps: [
-            migen
-            litex
-            litexBoards
             ps.colorama
             ps.packaging
             ps.pyserial
@@ -98,33 +64,77 @@
             ps.ninja
             ps.pytest
           ]);
-          localPythonPaths = [
-            (workspace + "/litedram")
-            (workspace + "/litedsp")
-            (workspace + "/liteeth")
-            (workspace + "/litei2c")
-            (workspace + "/liteiclink")
-            (workspace + "/litejesd204")
-            (workspace + "/litepcie")
-            (workspace + "/litesata")
-            (workspace + "/litescope")
-            (workspace + "/litesdcard")
-            (workspace + "/litespi")
-            (workspace + "/pythondata-cpu-lm32")
-            (workspace + "/pythondata-cpu-minerva")
-            (workspace + "/pythondata-cpu-mor1kx")
-            (workspace + "/pythondata-cpu-naxriscv")
-            (workspace + "/pythondata-cpu-sentinel")
-            (workspace + "/pythondata-cpu-serv")
-            (workspace + "/pythondata-cpu-veer_eh1")
-            (workspace + "/pythondata-cpu-vexiiriscv")
-            (workspace + "/pythondata-cpu-vexriscv")
-            (workspace + "/pythondata-cpu-vexriscv-smp")
-            (workspace + "/pythondata-misc-tapcfg")
-            (workspace + "/pythondata-misc-usb_ohci")
-            (workspace + "/pythondata-software-compiler_rt")
-            (workspace + "/pythondata-software-picolibc")
+          # The LiteX repositories are used from the workspace checkout, not installed:
+          # LiteX's BIOS build writes into the sources it stages, which a read-only Nix
+          # store copy cannot do, so they are only put on PYTHONPATH by the shellHook.
+          workspaceModules = [
+            "migen"
+            "litex"
+            "litex-boards"
+            "litedram"
+            "litedsp"
+            "liteeth"
+            "litei2c"
+            "liteiclink"
+            "litejesd204"
+            "litepcie"
+            "litesata"
+            "litescope"
+            "litesdcard"
+            "litespi"
+            "pythondata-cpu-lm32"
+            "pythondata-cpu-minerva"
+            "pythondata-cpu-mor1kx"
+            "pythondata-cpu-naxriscv"
+            "pythondata-cpu-sentinel"
+            "pythondata-cpu-serv"
+            "pythondata-cpu-veer_eh1"
+            "pythondata-cpu-vexiiriscv"
+            "pythondata-cpu-vexriscv"
+            "pythondata-cpu-vexriscv-smp"
+            "pythondata-misc-tapcfg"
+            "pythondata-misc-usb_ohci"
+            "pythondata-software-compiler_rt"
+            "pythondata-software-picolibc"
           ];
+          # `litex` is not installed, so recreate the console scripts it declares in
+          # litex/setup.py (entry_points) as launchers for the workspace sources.
+          litexTools = {
+            litex_term            = "litex.tools.litex_term:main";
+            litex_server          = "litex.tools.litex_server:main";
+            litex_jtag            = "litex.tools.litex_jtag:main";
+            litex_cli             = "litex.tools.litex_client:main";
+            litex_soc_gen         = "litex.tools.litex_soc_gen:main";
+            litex_periph_gen      = "litex.tools.litex_periph_gen:main";
+            litex_sim             = "litex.tools.litex_sim:main";
+            litex_bare_metal_demo = "litex.soc.software.demo.demo:main";
+            litex_json2dts_linux  = "litex.tools.litex_json2dts_linux:main";
+            litex_json2dts_zephyr = "litex.tools.litex_json2dts_zephyr:main";
+            litex_json2renode     = "litex.tools.litex_json2renode:main";
+            litex_read_verilog    = "litex.tools.litex_read_verilog:main";
+            litex_contributors    = "litex.tools.litex_contributors:main";
+            litex_build_bundle    = "litex.tools.litex_build_bundle:main";
+            litex_remote_build    = "litex.tools.litex_remote_build:main";
+          };
+          litexScripts = pkgs.symlinkJoin {
+            name = "litex-console-scripts";
+            paths = pkgs.lib.mapAttrsToList (name: entryPoint:
+              let
+                module   = builtins.head (pkgs.lib.splitString ":" entryPoint);
+                function = builtins.elemAt (pkgs.lib.splitString ":" entryPoint) 1;
+              in
+              pkgs.writeTextFile {
+                name = name;
+                destination = "/bin/${name}";
+                executable = true;
+                text = ''
+                  #!${pythonEnv}/bin/python
+                  import sys
+                  from ${module} import ${function}
+                  sys.exit(${function}())
+                '';
+              }) litexTools;
+          };
           xilinxChipdb = if withOpenxc7 then pkgs.stdenv.mkDerivation {
             pname = "litex-artix7-chipdb";
             version = "1.0.0";
@@ -149,6 +159,7 @@
           default = pkgs.mkShell {
             packages = [
               pythonEnv
+              litexScripts
             ] ++ pkgs.lib.optionals withOpenxc7 [
               pkgs.yosys
               pkgs.python312Packages.cython
@@ -167,8 +178,12 @@
             ];
 
             shellHook = ''
-              export LITEX_ROOT="$PWD"
-              export PYTHONPATH="${pkgs.lib.concatStringsSep ":" localPythonPaths}''${PYTHONPATH:+:$PYTHONPATH}"
+              export LITEX_ROOT="''${LITEX_WORKSPACE:-$PWD}"
+              export PYTHONPATH="''${LITEX_ROOT}/${pkgs.lib.concatStringsSep ":\${LITEX_ROOT}/" workspaceModules}''${PYTHONPATH:+:$PYTHONPATH}"
+              if [ ! -f "$LITEX_ROOT/litex/pyproject.toml" ]; then
+                echo "litex dev shell: no LiteX workspace at $LITEX_ROOT, start the shell in the" \
+                     "workspace root or set LITEX_WORKSPACE" >&2
+              fi
               ${pkgs.lib.optionalString withOpenxc7 ''
                 export CHIPDB="${xilinxChipdb}"
                 export NEXTPNR_XILINX_DIR="${nextpnr}"
